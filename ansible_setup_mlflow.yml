@@ -1,0 +1,54 @@
+- name: Configure MLFlow
+  hosts: m700
+  remote_user: ansible
+
+  tasks:
+
+  - name: Add mlflow mounts to nomad config
+    become: yes
+    ansible.builtin.blockinfile:
+      path: /opt/nomad/nomad.d/client.hcl
+      insertbefore: "}"
+      marker_begin: "MLFLOW_BEGIN"
+      marker_end: "MLFLOW_END"
+      block: |
+        host_volume "mlflow-backend-store" {
+          path      = "/opt/nomad/data/mlflow/backend"
+          read_only = false
+        }
+        host_volume "mlflow-artifacts" {
+          path      = "/opt/nomad/data/mlflow/artifacts"
+          read_only = false
+        }
+
+  - name: Create volume dirs 
+    # nogroup is important!
+    ansible.builtin.file:
+      mode: '0774'
+      path: "{{ item }}" 
+      owner: nomad 
+      group: root 
+      recurse: true
+      state: directory
+    loop:
+      - /opt/nomad/data/mlflow/backend
+      - /opt/nomad/data/mlflow/artifacts
+      - /opt/nomad/jobs/mlflow
+    become: yes
+
+  - name: Copy job file
+    become: yes
+    ansible.builtin.copy:
+      force: true
+      src: mlflow_job.nomad
+      dest: /opt/nomad/jobs/mlflow/mlflow_job.nomad
+      owner: nomad
+      group: nomad
+      mode: u=rw,g=r,o=r
+
+  - name: Restart nomad service
+    become: yes
+    ansible.builtin.systemd:
+      name: nomad
+      enabled: yes
+      state: restarted
