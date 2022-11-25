@@ -22,7 +22,6 @@
         }
 
   - name: Create volume dirs 
-    # nogroup is important!
     ansible.builtin.file:
       mode: '0774'
       path: "{{ item }}" 
